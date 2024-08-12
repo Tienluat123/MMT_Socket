@@ -1,4 +1,3 @@
-10MB.zip
-5MB.zip
-20MB.zip
-input.zip
+100MB.zip CRITICAL
+50MB.zip HIGH
+20MB.zip NORMAL
