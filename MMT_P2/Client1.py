@@ -59,7 +59,6 @@ def client_task(file_queue, downloaded_files):
             files_remaining = []
 
             while not file_queue.empty():
-                
                 filename, priority = file_queue.get()
                 line[filename] = high  # Đặt dòng hiển thị cho file
                 high += 1
@@ -82,45 +81,37 @@ def client_task(file_queue, downloaded_files):
                         continue
                     
                     # Phân loại các file vào từng nhóm độ ưu tiên
-                    if priority == 'CRITICAL':
-                        priority_files['CRITICAL'].append(filename)
-                    elif priority == 'HIGH':
-                        priority_files['HIGH'].append(filename)
-                    else:
-                        priority_files['NORMAL'].append(filename)
+                    if priority in priority_files:
+                        priority_files[priority].append(filename)
                     
                     files_remaining.append(filename)
                     
                 file_queue.task_done()
 
-            # Gửi tín hiệu cho server khi file_queue rỗng và không còn file nào để xử lý
             if file_queue.empty():
                 client_socket.sendall(b"DONE")
                 
-            
             if running:
                 last_update_time = time.time()
                 need_to_update_files = False
-                # Download chunks in round-robin fashion with priority
+                
                 while True:
-                    
                     current_time = time.time()
                     
-            # Cập nhật danh sách tệp mới mỗi 2 giây
+                    # Cập nhật danh sách tệp mới mỗi 2 giây
                     if current_time - last_update_time >= 2:
                         last_update_time = current_time
                         new_files = read_file_list('input.txt')
                         for entry in new_files:
-                            filename, priority = entry.split(' ')
-                            if filename not in [f for f, _ in file_queue.queue] and \
-                       filename not in sum(priority_files.values(), []):
-                                file_queue.put((filename, priority))
-                        # Đặt cờ cho vòng lặp tải xuống để dừng lại
-                                need_to_update_files = True
-                            else:
-                                need_to_update_files = False
+                            parts = entry.split(' ', 1)
+                            if len(parts) == 2:
+                                filename, priority = parts
+                                if filename not in [f for f, _ in file_queue.queue] and \
+                                   filename not in sum(priority_files.values(), []):
+                                    file_queue.put((filename, priority))
+                                    need_to_update_files = True
                         
-                    if need_to_update_files == True:
+                    if need_to_update_files:
                         client_socket.sendall(b"NEW_FILES")
                         break
 
@@ -157,19 +148,12 @@ def client_task(file_queue, downloaded_files):
                     if all_files_downloaded:
                         continue
                 
-                # Refill the queue if more files are in the input list
-                # file_list = read_file_list('input.txt')
-                # for file in file_list:
-                #     if file not in downloaded_files and file not in files_remaining:
-                #         file_queue.put(file)
-        
         client_socket.close()
     except Exception as e:
         print(f"Lỗi khi client xử lý các file: {e}")
     finally:
         if client_socket:
             client_socket.close()
-
 
 def read_file_list(file_path):
     file_list = []
@@ -193,8 +177,10 @@ file_queue = queue.Queue()
 downloaded_files = set()
 
 for entry in file_list:
-    filename, priority = entry.split(' ')
-    file_queue.put((filename, priority))
+    parts = entry.split(' ', 1)
+    if len(parts) == 2:
+        filename, priority = parts
+        file_queue.put((filename, priority))
 
 thread = threading.Thread(target=client_task, args=(file_queue, downloaded_files))
 thread.start()
